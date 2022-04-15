@@ -1,0 +1,163 @@
+---
+title: "exercise-11_challenge1"
+author: "SLCornett"
+date: "4/14/2022"
+output: 
+  html_document: 
+    highlight: textmate
+    theme: darkly
+    toc: TRUE
+    toc_float: TRUE
+---
+# Challenge 1\
+```{r preliminaries}
+library(tidyverse) #always necessary
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggpubr) 
+library(skimr)
+library(broom)
+library(infer)
+```
+
+
+## One-Factor ANOVA and Inference\
+A. Load the AVONET dataset
+```{r}
+f <- "https://raw.githubusercontent.com/difiore/ada-2022-datasets/main/AVONETdataset1.csv"
+d <- read_csv(f, col_names = TRUE)
+```
+
+
+B. Filter the dataset to include only the following variables (19 total): Species1, Family1, Order1, Beak.Length_Culmen, Beak.Width, Beak.Depth, Tarsus.Length, Wing.Length, Tail.Length, Mass, Habitat, Migration, Trophic.Level, Trophic.Niche, Min.Latitude, Max.Latitude, Centroid.Latitude, Primary.Lifestyle, and Range.Size
+```{r}
+#selecting specific variables
+d <- d %>% 
+  select(Species1, 
+         Family1, 
+         Order1, 
+         Beak.Length_Culmen, #added 12/4/22
+         Beak.Width, 
+         Beak.Depth, 
+         Tarsus.Length, 
+         Wing.Length, 
+         Tail.Length, 
+         Mass, 
+         Habitat, 
+         Migration, 
+         Trophic.Level, 
+         Trophic.Niche, 
+         Primary.Lifestyle, #added 12/4/22
+         Min.Latitude, 
+         Max.Latitude, 
+         Centroid.Latitude, 
+         Range.Size)
+head(d) # heck the selection worked
+```
+
+
+C.  Do a bit of exploratory data analysis with this dataset, e.g., using the {skimr} package.
+```{r}
+skim(d) # can tell me what's categorical and what's numeric data
+```
+**Q:** Which of the variables are categorical and which are numeric?\
+**A:** CATEGORICAL = Species1, Family1, Order1, Habitat, Trophic.Level, Trophic.Niche, Primary.Lifestyle\
+NUMERIC = Beak.Length_Culmen, Beak.Width, Beak.Depth, Tarsus.Length, Wing.Length, Tail.Length, Mass, Migration, Min.Latitude, Max.Latitude, Centroid.Latitude, Range.Size\
+
+### Step 1\
+1. Make boxplots of log(**Mass**) in relation to [A] **Trophic.Level** and [B] **Migration** behavior type.\
+For each plot, drop _from the visualization_ all species records where the categorical variable of interest is missing from the dataset (**drop.na()**). Also, you will want to convert the variable Migration (which is scored as a number: 1, 2, or 3) from class numeric to either being classified as a factor or as a character (string) variable.
+```{r}
+class(d$Migration) # checking migration is numerical, but not actually numeric data
+# as.factor turns Migration into categorical data, and make a column for logMass
+d <- mutate(d, Migration = as.factor(Migration), logMass = log(Mass))
+class(d$Migration)# check migration now categorical/factor (could also use as.character())
+
+# can filtered out NA to prevent an extra category for NAs
+df_1 <- d %>% # pinned and exclamation mark before is "not"
+  drop_na(Trophic.Level) # drop_na Drops rows containing missing values, {tidyr}
+# mass v. tropic.level plot
+mtl_p <- ggplot(data = df_1, # no NAs 
+                   aes(x = Trophic.Level,
+                       y = logMass
+                       )
+                   ) + geom_boxplot() # could also make it a violin plot
+mtl_p
+
+# migration as factor
+df_2 <- d %>% # pinned and exclamation mark before is "not"
+  drop_na(Migration) # drop_na Drops rows containing missing values, {tidyr}
+#logMass v. Migration plot
+mm_p <- ggplot(data = df_2, #no NAs from this dataframe, not from full dateset
+                     aes(x = Migration,
+                         y = logMass
+                         )
+                     ) + geom_boxplot() # makes it a violin plot, could also be a boxplot
+mm_p
+#only filtered out NAs for the plots, not for the working dataset. 
+```
+
+
+### Step 2\
+1. Run linear models using the `lm()` function to look at the relationship between log(**Mass**) and **Trophic.Level** and between log(**Mass**) and **Migration**.
+```{r}
+# linear model of logMass and Trophic.Level
+mtl_m <- lm(data = d, logMass ~ Trophic.Level) # linear model of logMass and Tropic level
+summary(mtl_m)
+
+# linear model of logMass and Migration
+mm_m <- lm(data = d, logMass ~ Migration) # could also use mutate() to make as.factor(Migration) = Migration 
+summary(mm_m)
+```
+
+
+2. Examine the output of the resultant linear models. Is log(**Mass**) associated with either **Trophic.Level** or **Migration** category? That is, in the global test of significance, is the F statistic large enough to reject the null hypothesis of an F value of zero?
+```{r}
+# ANOVA of the same variables?
+# ANOVA of LogMass by Trophic.Level
+mtl_a <- aov(data = d, logMass ~ Trophic.Level)
+summary(mtl_a)
+# ANOVA of LogMass by Migration
+mm_a <- aov(data = d, logMass ~ Migration)
+summary(mm_a)
+```
+
+
+3. Given the regression coefficients returned for your **Migration** model (mm_m), which Migration categor(ies) are different than the reference level? What level is the reference level?\
+**A:** \
+Relevel and assess differences among the remaining pair of Migration categories.
+```{r}
+
+```
+
+
+### Step 3 \
+1. Conduct a post-hoc **Tukey Significant Differences** test to also evaluate which Migration categories differ “significantly” from one another (<https://difiore.github.io/ada-2022/20-module.html#post-hoc-tests-in-anova>).\
+[NOTE: The `TukeyHSD()` function is run on the output of the ANOVA (`aov()`) function.]
+```{r}
+
+```
+
+
+### Step 4 \  
+Use a permutation approach to inference to generate a null distribution of F statistic values for the model of log(**Mass**) in relation to **Trophic.Level**. You can do this either by programming your own permutation test (e.g., by shuffling values for the predictor or response variable among observations and calculating an F statistic for each replicate) or by using the {infer} workflow and setting `calculate(stat="F")`.
+```{r}
+# pulling out the F-statistic (nonparametric)
+og_F <- aov(logMass ~ Trophic.Level, data = d) %>% # original F-stat
+  tidy() %>%
+  filter(term == "Trophic.Level")
+og_F # results for the F stat and p-value for the omnibus F test
+
+# Could also do this as a loop
+perm_F <- d %>% 
+  specify(logMass ~ Trophic.Level) %>%
+  hypothesise(null = "independence") %>% # independence must be lowercase
+  generate(reps = 1000, # 1000 reps
+           type = "permute") %>% # permutation
+  calculate(stat = "F") # calc F-stat in permutation
+visualise(perm_F) + shade_p_value(obs_stat = original_F$statistic, direction = "greater") # or histogram
+# P-value Comparison
+p_value <- permuted_F %>% get_p_value(obs_stat = original_F$statistic, direction = "greater")
+og_F$p.value
+```
