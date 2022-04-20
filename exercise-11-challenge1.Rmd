@@ -58,7 +58,7 @@ head(d) # heck the selection worked
 
 
 C.  Do a bit of exploratory data analysis with this dataset, e.g., using the {skimr} package.
-```{r}
+```{r skim}
 skim(d) # can tell me what's categorical and what's numeric data
 ```
 **Q:** Which of the variables are categorical and which are numeric?\
@@ -68,17 +68,16 @@ NUMERIC = Beak.Length_Culmen, Beak.Width, Beak.Depth, Tarsus.Length, Wing.Length
 ### Step 1\
 1. Make boxplots of log(**Mass**) in relation to [A] **Trophic.Level** and [B] **Migration** behavior type.\
 For each plot, drop _from the visualization_ all species records where the categorical variable of interest is missing from the dataset (**drop.na()**). Also, you will want to convert the variable Migration (which is scored as a number: 1, 2, or 3) from class numeric to either being classified as a factor or as a character (string) variable.
-```{r}
+```{r boxplots}
 class(d$Migration) # checking migration is numerical, but not actually numeric data
 # as.factor turns Migration into categorical data, and make a column for logMass
 d <- mutate(d, Migration = as.factor(Migration), logMass = log(Mass))
 class(d$Migration)# check migration now categorical/factor (could also use as.character())
 
 # can filtered out NA to prevent an extra category for NAs
-df_1 <- d %>% # pinned and exclamation mark before is "not"
-  drop_na(Trophic.Level) # drop_na Drops rows containing missing values, {tidyr}
+d <- na.omit(d) # tidy drop NA
 # mass v. tropic.level plot
-mtl_p <- ggplot(data = df_1, # no NAs 
+mtl_p <- ggplot(data = d, # no NAs 
                    aes(x = Trophic.Level,
                        y = logMass
                        )
@@ -89,7 +88,7 @@ mtl_p
 df_2 <- d %>% # pinned and exclamation mark before is "not"
   drop_na(Migration) # drop_na Drops rows containing missing values, {tidyr}
 #logMass v. Migration plot
-mm_p <- ggplot(data = df_2, #no NAs from this dataframe, not from full dateset
+mm_p <- ggplot(data = d, #no NAs from this dataframe, not from full dateset
                      aes(x = Migration,
                          y = logMass
                          )
@@ -101,7 +100,7 @@ mm_p
 
 ### Step 2\
 1. Run linear models using the `lm()` function to look at the relationship between log(**Mass**) and **Trophic.Level** and between log(**Mass**) and **Migration**.
-```{r}
+```{r Linear models}
 # linear model of logMass and Trophic.Level
 mtl_m <- lm(data = d, logMass ~ Trophic.Level) # linear model of logMass and Tropic level
 summary(mtl_m)
@@ -112,8 +111,8 @@ summary(mm_m)
 ```
 
 
-2. Examine the output of the resultant linear models. Is log(**Mass**) associated with either **Trophic.Level** or **Migration** category? That is, in the global test of significance, is the F statistic large enough to reject the null hypothesis of an F value of zero?
-```{r}
+2. Examine the output of the resultant linear models.
+```{r ANOVA}
 # ANOVA of the same variables?
 # ANOVA of LogMass by Trophic.Level
 mtl_a <- aov(data = d, logMass ~ Trophic.Level)
@@ -122,21 +121,50 @@ summary(mtl_a)
 mm_a <- aov(data = d, logMass ~ Migration)
 summary(mm_a)
 ```
+**Q.** Is log(**Mass**) associated with either **Trophic.Level** or **Migration** category? That is, in the global test of significance, is the F statistic large enough to reject the null hypothesis of an F value of zero?\
+**A.** Based on the output of each ANOVA summary, there is a significant association (***) large enough to reject the null hypothesis for logMass and both trophic level and Migration.\
 
 
-3. Given the regression coefficients returned for your **Migration** model (mm_m), which Migration categor(ies) are different than the reference level? What level is the reference level?\
-**A:** \
+3. **Q:** Given the regression coefficients returned for your **Migration** model (mm_m), which Migration categor(ies) are different than the reference level?\
+**A:** by releveling the migration model to reference level "2" or "3", i get different output from the original reference level. This is also shown below from the summary of the original model (mm_m) and the re-leveled models (mm_m2 and mm_m3).\
+**Q:** What level is the reference level?\
+**A:** The migration categories are "1", "2", and "3". By comparing the original migration model (mm_m) to the re-leveled models, i can see the default/original reference level was to level 1 (see mm_m and mm_m1 below). 
 Relevel and assess differences among the remaining pair of Migration categories.
-```{r}
+```{r relevel linear model}
+# reference level investigation: printing the default model.
+summary(mm_m)  # original migration model
 
+# look, Levels!
+levels(d$Migration) 
+# Relevel ref level 1
+d <- d %>% mutate(Migration = relevel(Migration, ref = "1")) # migration must be as.factor for this to work (above)
+# ref level 1, re-run linear model
+mm_m1 <- lm(data = d, logMass ~ Migration) # reference level 1
+summary(mm_m1)
+
+# Relevel ref level 2
+d <- d %>% mutate(Migration = relevel(Migration, ref = "2")) # migration must be as.factor for this to work (above)
+# ref level 2, re-run linear model
+mm_m2 <- lm(data = d, logMass ~ Migration) # reference level 2
+summary(mm_m2)
+
+# Relevel ref level 3
+d <- d %>% mutate(Migration = relevel(Migration, ref = "3")) # migration must be as.factor for this to work (above)
+# ref level 3, re-run linear model
+mm_m3 <- lm(data = d, logMass ~ Migration) # reference level 3
+summary(mm_m3)
 ```
 
 
 ### Step 3 \
 1. Conduct a post-hoc **Tukey Significant Differences** test to also evaluate which Migration categories differ “significantly” from one another (<https://difiore.github.io/ada-2022/20-module.html#post-hoc-tests-in-anova>).\
 [NOTE: The `TukeyHSD()` function is run on the output of the ANOVA (`aov()`) function.]
-```{r}
-
+```{r TukeyHSD}
+mm_a <- aov(data = d, logMass ~ Migration)
+posthoc_mm_a <- TukeyHSD(mm_a, which = "Migration", ordered = TRUE, conf.level = 0.95)
+posthoc_mm_a # all levels of migration compared to each other
+# plotting the posthoc Tukey test for a nice visual summary
+plot(posthoc_mm_a, xlim = c(0, 2)) # xlim set to show zero
 ```
 
 
@@ -156,8 +184,10 @@ perm_F <- d %>%
   generate(reps = 1000, # 1000 reps
            type = "permute") %>% # permutation
   calculate(stat = "F") # calc F-stat in permutation
-visualise(perm_F) + shade_p_value(obs_stat = original_F$statistic, direction = "greater") # or histogram
+visualise(perm_F) + shade_p_value(obs_stat = og_F$statistic, direction = "greater") # or histogram
+
 # P-value Comparison
-p_value <- permuted_F %>% get_p_value(obs_stat = original_F$statistic, direction = "greater")
+p_value <- perm_F %>% get_p_value(obs_stat = og_F$statistic, direction = "greater")
 og_F$p.value
 ```
+the end of challenge 1.

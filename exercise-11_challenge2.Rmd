@@ -19,20 +19,21 @@ library(ggpubr)
 library(skimr)
 library(broom)
 library(infer)
+library(mosaic)
 ```
 
 ## One-Factor ANOVA and Inference\
 A. Load the AVONET dataset
 ```{r}
 f <- "https://raw.githubusercontent.com/difiore/ada-2022-datasets/main/AVONETdataset1.csv"
-d <- read_csv(f, col_names = TRUE)
+d1 <- read_csv(f, col_names = TRUE)
 ```
 
 
 B. Filter the dataset to include only the following variables (19 total): Species1, Family1, Order1, Beak.Length_Culmen, Beak.Width, Beak.Depth, Tarsus.Length, Wing.Length, Tail.Length, Mass, Habitat, Migration, Trophic.Level, Trophic.Niche, Min.Latitude, Max.Latitude, Centroid.Latitude, Primary.Lifestyle, and Range.Size
-```{r}
+```{r set up and skim}
 #selecting specific variables
-d <- d %>% 
+d1 <- d1 %>% 
   select(Species1, 
          Family1, 
          Order1, 
@@ -52,13 +53,8 @@ d <- d %>%
          Max.Latitude, 
          Centroid.Latitude, 
          Range.Size)
-head(d) # heck the selection worked
-```
-
-
-C.  Do a bit of exploratory data analysis with this dataset, e.g., using the {skimr} package. Which of the variables are categorical and which are numeric?
-```{r}
-skim(d) # can tell me what's categorical and what's numeric data
+head(d1) # heck the selection worked
+skim(d1) # can tell me what's categorical and what's numeric data
 ```
 **Q:** Which of the variables are categorical and which are numeric?\
 **A:** CATEGORICAL = Species1, Family1, Order1, Habitat, Trophic.Level, Trophic.Niche, Primary.Lifestyle\
@@ -67,27 +63,27 @@ NUMERIC = Beak.Length_Culmen, Beak.Width, Beak.Depth, Tarsus.Length, Wing.Length
 ### Step 1\
 1. Create the following two new variables and add them to AVONET dataset:\
 [A] Relative beak length, which you should calculate as the residual of log(**Beak.Length_Culmen**) on log(**Mass**).
-```{r}
+```{r Beak Length, logMass mutate new variables}
 # adding the log calculations to the dataset
-d <- d %>% mutate(logBL = log(Beak.Length_Culmen), logMass = log(Mass))
+d1 <- d1 %>% mutate(logBL = log(Beak.Length_Culmen), logMass = log(Mass))
 # linear model
-BL_Mass <- lm(data = d, logBL ~ logMass)
+BL_Mass <- lm(data = d1, logBL ~ logMass)
 summary(BL_Mass)
 # pulling out the residuals
 relative_bl_mass <- BL_Mass$residuals
 head(relative_bl_mass) #relative relationship
 
 # put back in the dataset
-d <- d %>% mutate(relative_bl_mass)
+d1 <- d1 %>% mutate(relative_bl_mass)
 ```
 
 
 [B] Relative tarsus length, which you should calculate as the residual of log(**Tarsus.Length**) on log(**Mass**).
-```{r}
+```{r Tarsus length mutate new variable}
 # adding the log calculations to the dataset
-d <- d %>% mutate(logTL = log(Tarsus.Length))
+d1 <- d1 %>% mutate(logTL = log(Tarsus.Length))
 # linear model
-TL_Mass <- lm(data = d, logTL ~ logMass)
+TL_Mass <- lm(data = d1, logTL ~ logMass)
 summary(TL_Mass)
 
 #  pulling out the residuals 
@@ -95,71 +91,105 @@ relative_tl_mass <- TL_Mass$residuals
 head(relative_tl_mass) #relative relationship
 
 # put residuals back in the dataset
-d <- d %>% mutate(relative_tl_mass)
+d1 <- d1 %>% mutate(relative_tl_mass)
 ```
 
 
 ### Step 2\
 Make a boxplot or violin plot of [A] your new **relative tarsus length** variable in relation to **Primary.Lifestyle** and [B] of your new **relative beak length** variable in relation to **Trophic.Niche**
-```{r}
+```{r boxplots}
 # A: Tl_Mass residuals vs primary lifestyle
-rel_tlm_pl <- ggplot(data = d,  #tl= tarsus length, m = mass, res= residuals, pl = primary lifestyle
+rel.tlm_pl <- ggplot(data = d1,  #tl= tarsus length, m = mass, res= residuals, pl = primary lifestyle
                    aes(x = relative_tl_mass, #the relative tarsus length (vs Mass)
                        y = Primary.Lifestyle # primary lifestyle (pl)
                        )
-                   ) + geom_violin() # could also make it a violin plot
-rel_tlm_pl
+                   ) + geom_violin() # could also make it a box plot
+rel.tlm_pl
 
 # B: BL_Mass residuals vs trophic niche
-rel_blm_tn <- ggplot(data = d, #nl= beak length, m = mass, res= residuals, tn = trophic niche
+rel.blm_tn <- ggplot(data = d1, #nl= beak length, m = mass, res= residuals, tn = trophic niche
                    aes(x = relative_bl_mass,#the relative beak length (vs Mass) (blm)
                        y = Trophic.Niche # trophic niche (tn)
                        )
-                   ) + geom_violin() # could also make it a violin plot
-rel_blm_tn
+                   ) + geom_boxplot() # could also make it a violin plot
+rel.blm_tn
 ```
 
 ### Step 3\
 1. Run an ANOVA analyses to look at the association between geographic range size and the variable **Migration**. You should first look at the distribution of the variable **Range.Size** and decide whether and how it might need to be transformed.
-```{r}
-#range size
-hist(d$Range.Size) #looks funky, thus log transformation
-
-#migration status
-class(d$Migration) # checking migration is numerical, but not actually numeric data
-# as.factor turns Migration into categorical data, and make a column for logMass
-d <- mutate(d, Migration = as.factor(Migration))
-class(d$Migration)# check migration now categorical/factor (could also use as.character())
-
+```{r Transform Migration and range size, ANOVA range size and migration}
+#range size tranformation
+hist(d1$Range.Size) #looks funky, thus log transformation
 # RS transformation
-d <- d %>% mutate(logRS = log(Range.Size))
+d1 <- d1 %>% mutate(logRS = log(Range.Size)) # making a new variable of log(range size) in dataset for ease
+hist(d1$logRS) #much better.
+
+#migration status transformation
+class(d1$Migration) # checking migration is numerical, but not actually numeric data
+# as.factor turns Migration into categorical data, and make a column for logMass
+d1 <- mutate(d1, Migration = as.factor(Migration))
+class(d1$Migration)# check migration now categorical/factor (could also use as.character())
 
 #ANOVA
-rs_ms_a <- aov(data = d, logRS ~ Migration)
-rs_ms_a <- tidy(rs_ms_a )
-summary(rs_ms_a)
+rs_m_a <- aov(data = d1, logRS ~ Migration) # rs = range size, m = migration
+# rs_m_a <- tidy(rs_m_a)
+summary(rs_m_a)
 ```
-**Q:** Based on the global model, is range.size associated with form of migration? How much of the variance in your measure of range size is associated with Migration style?\
+**Q:** Based on the global model, is **range.size** associated with form of **migration**?\
+**A:** yes, based on the global model range size is associate with form of migration significantly (***).\
+**Q:** How much of the variance in your measure of range size is associated with Migration style?\
+**A:** The F-ratio. 
 
 
-2. Given the regression coefficients returned in output of the model, which **Migration** categor(ies) are different than the reference level? What level is the reference level?\
-[A] Relevel and assess differences among the remaining pair of **Migration** categories.\
-[B] Conduct a post-hoc **Tukey Significant Differences** test to also evaluate which **Migration** categories differ “significantly” from one another (<https://difiore.github.io/ada-2022/20-module.html#post-hoc-tests-in-anova>).\
-[NOTE: The `TukeyHSD()` function is run on the output of the ANOVA (`aov()`) function.]
-```{r}
-# the predictor variable, Migration, is a factor vector instead of a numeric vector, the coefficients are reported and interpreted a bit differently
-levels(d$Migration) 
-
-# A. Relevel
-d <- d %>% mutate(Migration = relevel(Migration, ref = "3")) # migration must be as.factor for this to work (above)
+2. **Q:** Given the regression coefficients returned in output of the [ANOVA (presumably since we did this with a linear model in Challenge 1)] model (rs_m_a), which **Migration** categor(ies) are different than the reference level?\
+**A:** All the re-leveled ANOVA models give the same output as the original, unlike the linear models in challege 1, where the reference level affected the model's output, so none of them are different from the original reference level.\
+**Q:** What level is the reference level?\
+**A:** Presumably all levels (for migration, 1,2, and 3) are the reference level.\
+[A] Relevel and assess differences among the remaining pair of **Migration** categories.
+```{r releveling ANOVA of migration}
+# the original ANOVA model for reference
+summary(rs_m_a)
 # We can easily relevel() what is the baseline group. The result is very similar, but the sign of  β1 is changed.
+# the predictor variable, Migration, is a factor vector instead of a numeric vector, the coefficients are reported and interpreted a bit differently
+levels(d1$Migration) 
+# Relevel to reference level 1
+d1 <- d1 %>% mutate(Migration = relevel(Migration, ref = "1")) 
+#re-run ANOVA with defined reference level 1
+rs_m_a1 <- aov(data = d1, logRS ~ Migration)
+summary(rs_m_a1)
+
+# Relevel to reference level 2
+d1 <- d1 %>% mutate(Migration = relevel(Migration, ref = "2")) 
+#re-run ANOVA with defined reference level 2
+rs_m_a2 <- aov(data = d1, logRS ~ Migration)
+summary(rs_m_a2)
+
+# Relevel to reference level 3
+d1 <- d1 %>% mutate(Migration = relevel(Migration, ref = "3")) 
+#re-run ANOVA with defined reference level 3
+rs_m_a3 <- aov(data = d1, logRS ~ Migration)
+summary(rs_m_a3)
+```
+
+
+[B] Conduct a post-hoc **Tukey Significant Differences** test to also evaluate which **Migration** categories differ “significantly” from one another.\
+(<https://difiore.github.io/ada-2022/20-module.html#post-hoc-tests-in-anova>).\
+[NOTE: The `TukeyHSD()` function is run on the output of the ANOVA (`aov()`) function.]
+```{r TukeyHSD of ANOVA}
+# running the tukey test on ANOVA of Range Size vs Migration
+rs_m_a
+#post-hoc test
+posthoc_rs_m_a <- TukeyHSD(rs_m_a, which = "Migration", ordered = TRUE, conf.level = 0.95)
+posthoc_rs_m_a # all levels of migration compared to each other
+# plotting the posthoc Tukey test for a nice visual summary
+plot(posthoc_rs_m_a, xlim = c(0, 4)) # xlim set to show zero
 ```
 
 
 ### Step 4\
 1. Winnow your data to just consider birds from the Infraorder “Passeriformes” (song birds).
-```{r}
-passer <- d %>% filter(Order1 == "Passeriformes")
+```{r winnow}
+passer <- d1 %>% filter(Order1 == "Passeriformes")
 ```
 
 
@@ -167,58 +197,88 @@ passer <- d %>% filter(Order1 == "Passeriformes")
   [A] Make boxplots of response variable by each predictor and by the combination of predictors\
   [B] Run linear models for each predictor separately and interpret the model output\
 ```{r}
-# 1. ANOVA of relative beak length and primary lifestyle of Passeriformes
+# 1. ANOVA of relative beak length and primary lifestyle of Passeriformes (.a = anova)
 pass_rblm_pl.a <- aov(data = passer, relative_bl_mass ~ Primary.Lifestyle) # ANOVA, pass = Passeriformes, r = relative
 summary(pass_rblm_pl.a)
-
-# 1A Boxplot of relative beak length by primary lifestyle
+# 1A Boxplot of relative beak length by primary lifestyle (.p = plot)
 pass_rblm_pl.p <- ggplot(data = passer, # passer only filtered dataframe
                          aes(x = relative_bl_mass,# the relative beak length (vs Mass) (rblm)
                              y = Primary.Lifestyle # pl
                              )
                          ) + geom_violin()
 pass_rblm_pl.p
+# 1B linear model: relative bleak length vs primary lifestyle of Passeriformes (.lm = linear model)
+pass_rblm_pl.lm <- lm(data = passer, relative_bl_mass ~ Primary.Lifestyle)
+summary(pass_rblm_pl.lm)
+```
 
-# 1B linear model: relative bleak length vs primary lifestyle of Passeriformes 
-pass_rbl_pl.lm <- lm(data= passer, relative_bl_mass ~ Primary.Lifestyle)
-pass_rbl_pl.lm
 
-# 2 ANOVA of relative beak length and trophic level of Passeriformes
-pass_rblm_tl.a <- aov(data = passer, relative_bl_mass ~ Trophic.Level) # ANOVA, pass = Passeriformes, r = relative
-summary(pass_rblm_pl.a)
+[2] Relative beak length vs. 
+```{r}
+# 2 ANOVA of relative beak length and trophic level of Passeriformes (.a = anova)
+pass_rblm_tl.a <- aov(data = passer, relative_bl_mass ~ Trophic.Level) # ANOVA, pass = Passeriformes, r = relative 
+summary(pass_rblm_tl.a)
 
 # 2A Boxplot of relative beak length by trophic niche 
 pass_rblm_tl.p <- ggplot(data = passer, 
                          aes(x = relative_bl_mass, # the relative beak length (vs Mass) (rblm)
                              y = Trophic.Level # the relative beak length (vs Mass) (rblm)
                              )
-                         ) + geom_violin()
+                         ) + geom_boxplot()
 pass_rblm_tl.p
 
 # 2B linear model: relative beak length vs trophic level  of Passeriformes 
-pass_rbl_tl.lm <- lm(data= passer, relative_bl_mass ~ Trophic.Level)
-pass_rbl_tl.lm
+pass_rblm_tl.lm <- lm(data = passer, relative_bl_mass ~ Trophic.Level)
+summary(pass_rblm_tl.lm)
 ```
 
 
 ### Step 5\
-Run a two-factor model to look at the association between relative beak length and both Primary.Lifestyle and Trophic.Level among passariforms. Based on the model output, what would you conclude about how relative beak length is related to these two variables?
-```{r}
-
+Run a two-factor model to look at the association between **relative beak length** and both **Primary.Lifestyle** and **Trophic.Level** among passeriforms.
+```{r Passer two way ANOVA}
+pass_rblm_pl_tl <- aov(data = passer, relative_bl_mass ~ Primary.Lifestyle + Trophic.Level)
+summary(pass_rblm_pl_tl)
 ```
+**Q:** Based on the model output, what would you conclude about how relative beak length is related to these two variables?\
+**A:** I conclude there is a significant association between relative beak length and trophic level and primary lifestyle as individual variables.
+
 
 ### Step 6\
 Finally, run an additional two-way model with the same dataset and predictors, but adding the possibility of an interaction term. To do this, you should modify your model formula using the colon operator (`:`) to specify the interaction, e.g., **relative beak length ~ Primary.Lifestyle + Trophic.Level + Primary.Lifestyle:Trophic.Level**. 
 ```{r}
-
+pass_rblm_pl_tl.i <- aov(data = passer, relative_bl_mass ~ Primary.Lifestyle + Trophic.Level + Primary.Lifestyle:Trophic.Level) # .i = interaction
+summary(pass_rblm_pl_tl.i)
 ```
 **Q:**Based on the model output, what would you now conclude about how relative beak length is related to these two variables?\
-**A:**
+**A:** I conclude there is a significant association between relative beak length and trophic level and primary lifestyle as independent variables AND when they intersect with each other. 
 
 
 ### Step 7\
 Use the `interaction.plot()` function to visualize the interaction between **Primary.Lifestyle** and **Trophic.Level** (see Module 20).
 ```{r}
-
+interaction.plot(
+  x.factor = passer$Primary.Lifestyle, # predictor 1
+  xlab = "Primary Lifestyle",
+  trace.factor = passer$Trophic.Level, # predictor 2
+  trace.label = "Trophic Level",
+  response = passer$relative_bl_mass, # response variable is relative beak length
+  fun = base::mean, # make sure we use {base} version
+  ylab = "Relative Beak Length"
+)
 ```
 
+
+### Additional Steps? \
+As noted in Module 20, a general rule of thumb for “equal” variances is to compare the largest and smallest within-grouping level standard deviations and, if this value is less than 2, then it is often reasonable to presume the assumption may not be violated. As a an additional step, check whether **relative beak length** is normally distributed across **Trophical.Level** groups and whether the variance in relative beak size is or is not roughly the same across levels.
+```{r}
+# rel.blm_tl_hist <- ggplot(data = NULL, aes(x = BL_Mass$model$logBL, y = BL_Mass$residuals)) + geom_point() + facet_wrap(d1$Trophic.Level)
+# rel.blm_tl_hist
+
+#rel.blm_tl_hist <- ggplot(data = d1, aes(x = relative_bl_mass)) + geom_histogram() + facet_wrap(d1$Trophic.Level)
+#rel.blm_tl_hist
+# plot the residuals of beak length and Mass (linear model that gave the relative beak length residuals)
+# plot(BL_Mass) # ~ d1$Trophic.Level
+```
+i tried my best and did not succeed, just as coldplay foretold. 
+
+the end of challenge 2. 
